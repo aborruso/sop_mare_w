@@ -131,6 +131,7 @@
             <input id="resSlider" type="range" min="3" max="7" value="5" class="w-full accent-[color:var(--accent)]" />
           </div>
           <div id="hexLegend" class="mt-2"></div>
+          <button id="fitBtn" class="mt-3 w-full facet-pill rounded-lg px-2 py-1.5 text-[12px]" title="Inquadra la mappa sui risultati filtrati">⤢ Inquadra i risultati</button>
         </div>
         <!-- Category legend -->
         <div id="catLegend" class="absolute bottom-6 right-3 z-10 rounded-xl p-3 text-xs shadow-lg space-y-1"
@@ -183,10 +184,29 @@
   }
   function decadeOf(s) { return s.dataInizio ? Math.floor(s.dataInizio / 10) * 10 : null; }
 
+  // Etichette dei vocabolari (bozza, da validare con gli archivisti)
+  const TIPO_LABELS = {
+    concessione_demaniale:"Concessione demaniale (CDM)", ritrovamento:"Ritrovamento / reperti",
+    parere:"Parere", conferenza_servizi:"Conferenza di servizi", ricorso:"Ricorso",
+    autorizzazione:"Autorizzazione", via_compatibilita_ambientale:"VIA / comp. ambientale",
+    prospezione_archeologica:"Prospezione archeologica", nulla_osta:"Nulla osta",
+    accordo_programma:"Accordo di programma", pianificazione_demaniale:"Pianificazione demaniale",
+    difesa_costa:"Difesa costiera", vincolo:"Vincolo", rilievo_indagine:"Rilievi / indagini"
+  };
+  const OGG_LABELS = {
+    campo_boe:"Campo boe", pontile_galleggiante:"Pontile galleggiante",
+    piattaforma_galleggiante:"Piattaforma galleggiante", corridoio_di_lancio:"Corridoio di lancio",
+    scivolo_alaggio_varo:"Scivolo / alaggio / varo", ripascimento_arenile:"Ripascimento arenile",
+    porto_turistico:"Porto turistico", ricerca_idrocarburi:"Ricerca idrocarburi"
+  };
+
   // --- Stato dei filtri ---
-  const filters = { provincia:new Set(), sezione:new Set(), serie:new Set(), tipo:new Set(), decennio:new Set(), q:"", luogo:"" };
+  const filters = { provincia:new Set(), sezione:new Set(), serie:new Set(), tipo:new Set(),
+                    decennio:new Set(), procedimento:new Set(), oggetto:new Set(), q:"", luogo:"" };
 
   const FACETS = [
+    { key:"procedimento", title:"Tipo di procedimento", level:"multi", get:s => s.tipiProcedimento || [], fmt:v => TIPO_LABELS[v] || v },
+    { key:"oggetto",   title:"Oggetto / opera", level:"multi", get:s => s.oggetti || [], fmt:v => OGG_LABELS[v] || v },
     { key:"provincia", title:"Provincia", level:"loc", get:l => l.provincia || null },
     { key:"tipo",      title:"Tipo di luogo", level:"loc", get:l => catOf(l), fmt:v => CAT[v].label },
     { key:"sezione",   title:"Sezione", level:"scheda", get:s => s.sezione || "—" },
@@ -206,6 +226,8 @@
     if (exclude !== "sezione" && filters.sezione.size && !filters.sezione.has(s.sezione || "—")) return false;
     if (exclude !== "serie" && filters.serie.size && !filters.serie.has(s.serie || "—")) return false;
     if (exclude !== "decennio" && filters.decennio.size && !filters.decennio.has(decadeOf(s))) return false;
+    if (exclude !== "procedimento" && filters.procedimento.size && !(s.tipiProcedimento || []).some(t => filters.procedimento.has(t))) return false;
+    if (exclude !== "oggetto" && filters.oggetto.size && !(s.oggetti || []).some(o => filters.oggetto.has(o))) return false;
     // filtri a livello località: la scheda passa se ha ALMENO una località che li soddisfa
     const provOn = exclude !== "provincia" && filters.provincia.size;
     const tipoOn = exclude !== "tipo" && filters.tipo.size;
@@ -387,7 +409,10 @@
          <div class="mt-1 text-[11px]" style="color:var(--muted)">${s.sezione?("sez. "+s.sezione+" · "):""}${escapeHtml(shorten(s.serie,42)||"—")}</div>
          <div class="mt-2 flex flex-wrap gap-1">${chips} ${more}</div>`;
       div.addEventListener("mouseenter", () => highlight(s));
-      div.addEventListener("mouseleave", () => { if (map.getSource("hl")) map.getSource("hl").setData({type:"FeatureCollection",features:[]}); });
+      div.addEventListener("mouseleave", () => {
+        if (!document.getElementById("drawer").classList.contains("open") && map.getSource("hl"))
+          map.getSource("hl").setData({ type:"FeatureCollection", features:[] });
+      });
       div.addEventListener("click", () => openScheda(s));
       el.appendChild(div);
     }
@@ -405,12 +430,22 @@
   // --- Drawer di lettura della scheda ---
   function openScheda(s) {
     const anni = s.dataInizio ? (s.dataInizio + (s.dataFine && s.dataFine!==s.dataInizio ? "–"+s.dataFine : "")) : "—";
+    const tags = [
+      ...(s.tipiProcedimento||[]).map(t => ({ l:TIPO_LABELS[t]||t, c:"#0e7c86" })),
+      ...(s.oggetti||[]).map(o => ({ l:OGG_LABELS[o]||o, c:"#7c5cbf" })),
+    ];
+    const tagsHtml = tags.length
+      ? `<div class="flex flex-wrap gap-1 mt-2">` + tags.map(t =>
+          `<span class="rounded-full px-2 py-0.5 text-[11px]" style="background:${t.c}22;border:1px solid ${t.c}66;color:var(--ink)">${t.l}</span>`).join("") + `</div>`
+      : "";
     document.getElementById("drawerMeta").innerHTML =
       `<div class="flex items-baseline gap-2">
          <span class="font-display text-2xl leading-none">n. ${s.corda}</span>
          <span class="text-xs uppercase tracking-wide tnum" style="color:var(--muted)">${anni}</span>
+         ${s.nPratiche?`<span class="text-[11px]" style="color:var(--muted)">· ${s.nPratiche} pratiche</span>`:""}
        </div>
-       <div class="text-xs mt-0.5" style="color:var(--muted)">${s.sezione?("sez. "+s.sezione+" · "):""}${escapeHtml(s.serie||"—")}</div>`;
+       <div class="text-xs mt-0.5" style="color:var(--muted)">${s.sezione?("sez. "+s.sezione+" · "):""}${escapeHtml(s.serie||"—")}</div>
+       ${tagsHtml}`;
     const body = document.getElementById("drawerBody");
     body.innerHTML = s.md ? marked.parse(s.md) : "<p style='color:var(--muted)'>Testo non disponibile.</p>";
     body.scrollTop = 0;
@@ -426,6 +461,15 @@
   document.getElementById("drawerClose").addEventListener("click", closeScheda);
   document.getElementById("scrim").addEventListener("click", closeScheda);
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeScheda(); });
+  function fitToFiltered() {
+    const pts = aggregatePoints(filteredSchede());
+    if (!pts.length) return;
+    const b = new maplibregl.LngLatBounds();
+    pts.forEach(p => b.extend([p.lon, p.lat]));
+    const drawerOpen = document.getElementById("drawer").classList.contains("open");
+    map.fitBounds(b, { padding: drawerOpen ? { top:60, right:540, bottom:60, left:60 } : 60, maxZoom:10, duration:500 });
+  }
+
   function highlight(s) {
     if (!map.getSource("hl")) return;
     const feats = s.localita.filter(l => l.lat != null).map(l => ({ type:"Feature", geometry:{ type:"Point", coordinates:[l.lon,l.lat] }, properties:{} }));
@@ -443,6 +487,9 @@
         if (f.level === "scheda") {
           const v = f.get(s); if (v == null) continue;
           counts.set(v, (counts.get(v)||0)+1);
+        } else if (f.level === "multi") {
+          const seen = new Set();
+          for (const v of (f.get(s) || [])) { if (v==null||seen.has(v)) continue; seen.add(v); counts.set(v,(counts.get(v)||0)+1); }
         } else {
           const seen = new Set();
           for (const l of s.localita) {
@@ -500,15 +547,16 @@
   map.on("load", () => {
     map.addSource("hl", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
     map.addLayer({ id:"hl", type:"circle", source:"hl",
-      paint:{ "circle-radius":13, "circle-color":"rgba(0,0,0,0)", "circle-stroke-width":3, "circle-stroke-color":"var(--accent)" } });
+      paint:{ "circle-radius":16, "circle-color":"rgba(255,90,31,0.12)", "circle-stroke-width":3, "circle-stroke-color":"#ff5a1f" } });
   });
 
   // --- Controls ---
   document.getElementById("search").addEventListener("input", e => { filters.q = e.target.value.trim(); refresh(false); });
   document.getElementById("resSlider").addEventListener("input", e => { document.getElementById("resVal").textContent = e.target.value; refresh(false); });
   document.getElementById("hexToggle").addEventListener("change", () => refresh(false));
+  document.getElementById("fitBtn").addEventListener("click", fitToFiltered);
   document.getElementById("resetBtn").addEventListener("click", () => {
-    for (const k of ["provincia","sezione","serie","tipo","decennio"]) filters[k].clear();
+    for (const k of ["provincia","sezione","serie","tipo","decennio","procedimento","oggetto"]) filters[k].clear();
     filters.q=""; filters.luogo=""; document.getElementById("search").value=""; refresh(false);
   });
   document.getElementById("themeBtn").addEventListener("click", () => {

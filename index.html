@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Catalogo · Archivio di Deposito — Soprintendenza del Mare</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<script src="https://unpkg.com/marked@14.1.3/marked.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: { colors: {
+      bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)",
+      ink: "var(--ink)", muted: "var(--muted)", line: "var(--line)", accent: "var(--accent)"
+    }, fontFamily: { display: ["Fraunces", "serif"] } } }
+  };
+</script>
+<script src="./catalogo_data.js"></script>
+<style>
+  :root {
+    --bg:#e9eff0; --surface:#fbfcfc; --panel:#f2f6f6; --ink:#0b1d26; --muted:#546770;
+    --line:#d2dee0; --accent:#0e7c86; --accent-ink:#ffffff;
+    --hex0:#dcebe9; --hex1:#8fc9c6; --hex2:#3f9b9a; --hex3:#0e6a70; --hex4:#083b42;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#08171e; --surface:#0f2630; --panel:#0c2029; --ink:#e7eef0; --muted:#8fa4ab;
+      --line:#213f49; --accent:#3bb7b3; --accent-ink:#06232a;
+      --hex0:#123b40; --hex1:#1c6169; --hex2:#2c8f92; --hex3:#54bdbb; --hex4:#9fe3df;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#e9eff0; --surface:#fbfcfc; --panel:#f2f6f6; --ink:#0b1d26; --muted:#546770;
+    --line:#d2dee0; --accent:#0e7c86; --accent-ink:#ffffff;
+    --hex0:#dcebe9; --hex1:#8fc9c6; --hex2:#3f9b9a; --hex3:#0e6a70; --hex4:#083b42;
+  }
+  :root[data-theme="dark"] {
+    --bg:#08171e; --surface:#0f2630; --panel:#0c2029; --ink:#e7eef0; --muted:#8fa4ab;
+    --line:#213f49; --accent:#3bb7b3; --accent-ink:#06232a;
+    --hex0:#123b40; --hex1:#1c6169; --hex2:#2c8f92; --hex3:#54bdbb; --hex4:#9fe3df;
+  }
+  html, body { height:100%; }
+  body { background:var(--bg); color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .facet-pill { border:1px solid var(--line); background:var(--surface); color:var(--ink); }
+  .facet-pill[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .facet-pill:focus-visible, button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .scroll-thin::-webkit-scrollbar { width:9px; height:9px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background:var(--line); border-radius:6px; }
+  .maplibregl-popup-content { background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:10px; font-family:inherit; box-shadow:0 6px 24px rgba(0,0,0,.18); }
+  .maplibregl-popup-tip { border-top-color:var(--surface)!important; border-bottom-color:var(--surface)!important; }
+  .card { background:var(--surface); border:1px solid var(--line); }
+  .card:hover { border-color:var(--accent); }
+  .card.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none!important; animation:none!important; } }
+  /* Drawer di lettura scheda */
+  #drawer { transform:translateX(100%); transition:transform .28s ease; }
+  #drawer.open { transform:translateX(0); }
+  #scrim { opacity:0; pointer-events:none; transition:opacity .28s ease; }
+  #scrim.open { opacity:1; pointer-events:auto; }
+  .prose-scheda { line-height:1.6; }
+  .prose-scheda h1 { font-family:"Fraunces",serif; font-size:1.6rem; margin:.2rem 0 .6rem; }
+  .prose-scheda h2 { font-family:"Fraunces",serif; font-size:1.15rem; margin:1.2rem 0 .4rem; padding-bottom:.2rem; border-bottom:1px solid var(--line); color:var(--accent); }
+  .prose-scheda p { margin:.5rem 0; }
+  .prose-scheda ul { margin:.4rem 0 .8rem; padding-left:1.1rem; list-style:disc; }
+  .prose-scheda li { margin:.15rem 0; }
+  .prose-scheda strong { font-weight:600; }
+  .prose-scheda hr { border:0; border-top:1px solid var(--line); margin:1rem 0; }
+  .prose-scheda em { color:var(--muted); }
+  .prose-scheda code { background:var(--panel); padding:.05rem .3rem; border-radius:4px; font-size:.85em; }
+</style>
+</head>
+<body class="h-full">
+<div class="flex flex-col h-screen">
+
+  <!-- Header -->
+  <header class="flex items-center gap-4 px-5 py-3 border-b" style="border-color:var(--line);background:var(--surface)">
+    <div class="min-w-0">
+      <h1 class="font-display text-xl sm:text-2xl leading-tight" style="text-wrap:balance">Archivio di Deposito</h1>
+      <p class="text-xs uppercase tracking-wider" style="color:var(--muted);letter-spacing:.12em">Soprintendenza del Mare · catalogo delle buste</p>
+    </div>
+    <div class="ml-auto flex items-center gap-3">
+      <div class="text-right leading-tight">
+        <div><span id="countSchede" class="text-lg font-semibold tnum">—</span>
+             <span class="text-[11px] uppercase tracking-wide" style="color:var(--muted)">schede</span></div>
+        <div><span id="countLuoghi" class="text-sm font-medium tnum">—</span>
+             <span class="text-[11px] uppercase tracking-wide" style="color:var(--muted)">luoghi in mappa</span></div>
+      </div>
+      <button id="themeBtn" class="facet-pill rounded-lg px-3 py-2 text-sm" title="Cambia tema">◐</button>
+    </div>
+  </header>
+
+  <div class="flex flex-1 min-h-0">
+
+    <!-- Facets -->
+    <aside id="facets" class="w-72 shrink-0 border-r overflow-y-auto scroll-thin p-4 space-y-5 hidden md:block"
+           style="border-color:var(--line);background:var(--panel)">
+      <div>
+        <input id="search" type="search" placeholder="Cerca in titolo, note, località…"
+               class="w-full rounded-lg px-3 py-2 text-sm border" style="border-color:var(--line);background:var(--surface);color:var(--ink)" />
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-xs uppercase tracking-wider" style="color:var(--muted)">Filtri</span>
+        <button id="resetBtn" class="text-xs underline" style="color:var(--accent)">azzera</button>
+      </div>
+      <div id="activePlace" class="hidden"></div>
+      <div id="facetGroups" class="space-y-5"></div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 min-w-0 flex flex-col">
+      <!-- Map -->
+      <section class="relative" style="height:52%">
+        <div id="map" class="absolute inset-0"></div>
+        <!-- Map controls -->
+        <div class="absolute top-3 left-3 z-10 rounded-xl p-3 text-sm shadow-lg" style="background:var(--surface);border:1px solid var(--line);max-width:230px">
+          <label class="flex items-center justify-between gap-2">
+            <span>Esagoni H3</span>
+            <input id="hexToggle" type="checkbox" checked class="accent-[color:var(--accent)]" />
+          </label>
+          <div class="mt-2">
+            <div class="flex justify-between text-[11px]" style="color:var(--muted)">
+              <span>risoluzione</span><span id="resVal" class="tnum">5</span>
+            </div>
+            <input id="resSlider" type="range" min="3" max="7" value="5" class="w-full accent-[color:var(--accent)]" />
+          </div>
+          <div id="hexLegend" class="mt-2"></div>
+        </div>
+        <!-- Category legend -->
+        <div id="catLegend" class="absolute bottom-6 right-3 z-10 rounded-xl p-3 text-xs shadow-lg space-y-1"
+             style="background:var(--surface);border:1px solid var(--line)"></div>
+      </section>
+
+      <!-- List -->
+      <section class="flex-1 min-h-0 border-t overflow-y-auto scroll-thin p-4" style="border-color:var(--line)">
+        <div id="list" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Drawer di lettura scheda -->
+  <div id="scrim" class="fixed inset-0 z-40" style="background:rgba(3,15,20,.45)"></div>
+  <aside id="drawer" class="fixed top-0 right-0 z-50 h-full w-full sm:w-[520px] max-w-full flex flex-col shadow-2xl"
+         style="background:var(--surface);border-left:1px solid var(--line)">
+    <div class="flex items-center gap-3 px-5 py-3 border-b" style="border-color:var(--line)">
+      <div id="drawerMeta" class="min-w-0 flex-1"></div>
+      <button id="drawerClose" class="facet-pill rounded-lg px-3 py-1.5 text-sm" title="Chiudi (Esc)">✕</button>
+    </div>
+    <div id="drawerBody" class="prose-scheda overflow-y-auto scroll-thin px-5 py-4 flex-1" style="color:var(--ink)"></div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const DATA = (window.CATALOGO_DATA || { schede: [] }).schede;
+
+  // --- Categorie di feature (colore + etichetta) ---
+  const CAT = {
+    comune:    { label: "Comune",           color: "#0e7c86" },
+    centro:    { label: "Centro abitato",   color: "#2a7de1" },
+    isola:     { label: "Isola",            color: "#3fa34d" },
+    gruppo:    { label: "Gruppo di isole",  color: "#7c5cbf" },
+    provincia: { label: "Provincia",        color: "#9aa6b2" },
+    feature:   { label: "Feature marina",   color: "#e4572e" },
+    altro:     { label: "Da verificare",    color: "#c58a1e" },
+  };
+  function catOf(loc) {
+    const f = (loc.feature || "").toLowerCase();
+    if (f.includes("gruppo")) return "gruppo";
+    if (f === "isola") return "isola";
+    if (f === "provincia") return "provincia";
+    if (f.includes("banco") || f.includes("canale") || f.includes("salina")) return "feature";
+    if (loc.stato === "comune" || f === "comune" || f === "sede comunale") return "comune";
+    if (f.includes("centro")) return "centro";
+    return "altro";
+  }
+  function decadeOf(s) { return s.dataInizio ? Math.floor(s.dataInizio / 10) * 10 : null; }
+
+  // --- Stato dei filtri ---
+  const filters = { provincia:new Set(), sezione:new Set(), serie:new Set(), tipo:new Set(), decennio:new Set(), q:"", luogo:"" };
+
+  const FACETS = [
+    { key:"provincia", title:"Provincia", level:"loc", get:l => l.provincia || null },
+    { key:"tipo",      title:"Tipo di luogo", level:"loc", get:l => catOf(l), fmt:v => CAT[v].label },
+    { key:"sezione",   title:"Sezione", level:"scheda", get:s => s.sezione || "—" },
+    { key:"serie",     title:"Serie", level:"scheda", get:s => s.serie || "—" },
+    { key:"decennio",  title:"Decennio", level:"scheda", get:s => decadeOf(s), fmt:v => v + "s" },
+  ];
+
+  // `exclude` = chiave di faccetta da ignorare (per i conteggi faccettati)
+  function schedaMatches(s, exclude) {
+    // filtro per luogo specifico (click sulla mappa): sempre attivo
+    if (filters.luogo && !s.localita.some(l => l.nome === filters.luogo)) return false;
+    if (filters.q && exclude !== "q") {
+      const q = filters.q.toLowerCase();
+      const hay = (s.titolo + " " + s.annotazioni + " " + s.localita.map(l => l.nome + " " + (l.comune||"")).join(" ")).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (exclude !== "sezione" && filters.sezione.size && !filters.sezione.has(s.sezione || "—")) return false;
+    if (exclude !== "serie" && filters.serie.size && !filters.serie.has(s.serie || "—")) return false;
+    if (exclude !== "decennio" && filters.decennio.size && !filters.decennio.has(decadeOf(s))) return false;
+    // filtri a livello località: la scheda passa se ha ALMENO una località che li soddisfa
+    const provOn = exclude !== "provincia" && filters.provincia.size;
+    const tipoOn = exclude !== "tipo" && filters.tipo.size;
+    if (provOn || tipoOn) {
+      if (!s.localita.some(l => locMatches(l, exclude))) return false;
+    }
+    return true;
+  }
+  function locMatches(l, exclude) {
+    if (exclude !== "provincia" && filters.provincia.size && !filters.provincia.has(l.provincia)) return false;
+    if (exclude !== "tipo" && filters.tipo.size && !filters.tipo.has(catOf(l))) return false;
+    return true;
+  }
+
+  function filteredSchede() { return DATA.filter(schedaMatches); }
+
+  // Aggrega i punti per località (lat/lon) fra le schede filtrate
+  function aggregatePoints(schede) {
+    const byKey = new Map();
+    for (const s of schede) {
+      for (const l of s.localita) {
+        if (l.lat == null || l.lon == null) continue;
+        if (!locMatches(l)) continue;
+        const key = l.lat.toFixed(4) + "," + l.lon.toFixed(4);
+        let p = byKey.get(key);
+        if (!p) { p = { lat:l.lat, lon:l.lon, nome:l.nome, comune:l.comune, provincia:l.provincia, feature:l.feature, cat:catOf(l), corde:new Set() }; byKey.set(key, p); }
+        p.corde.add(s.corda);
+      }
+    }
+    return [...byKey.values()];
+  }
+
+  // --- Mappa ---
+  const start = document.documentElement.getAttribute("data-theme")
+    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", start);
+  function tileUrl(theme) {
+    return "https://basemaps.cartocdn.com/" + (theme === "dark" ? "dark_all" : "light_all") + "/{z}/{x}/{y}.png";
+  }
+  const map = new maplibregl.Map({
+    container: "map",
+    style: {
+      version: 8,
+      sources: { base: { type:"raster", tiles:[tileUrl(start)], tileSize:256, attribution:"© OpenStreetMap © CARTO" } },
+      layers: [{ id:"base", type:"raster", source:"base" }]
+    },
+    center: [13.4, 37.9], zoom: 6.4, attributionControl: true
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "top-right");
+
+  const HEX_COLORS = ["--hex0","--hex1","--hex2","--hex3","--hex4"].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+  let hexBreaks = [1,2,3,5,8];
+
+  function hexColorFor(count) {
+    const c = getComputedStyle(document.documentElement);
+    const cols = ["--hex0","--hex1","--hex2","--hex3","--hex4"].map(v => c.getPropertyValue(v).trim());
+    let i = 0; for (let k=0;k<hexBreaks.length;k++){ if (count>=hexBreaks[k]) i=k; }
+    return cols[i];
+  }
+
+  function buildHexGeoJSON(points, res) {
+    const counts = new Map();
+    for (const p of points) {
+      const cell = h3.latLngToCell(p.lat, p.lon, res);
+      counts.set(cell, (counts.get(cell)||0) + p.corde.size);
+    }
+    const feats = [];
+    let max = 1;
+    for (const [cell, n] of counts) { if (n>max) max=n; }
+    // scala i break sul massimo corrente
+    hexBreaks = [1, Math.max(2,Math.round(max*0.15)), Math.max(3,Math.round(max*0.35)), Math.max(4,Math.round(max*0.6)), Math.max(5,Math.round(max*0.85))];
+    for (const [cell, n] of counts) {
+      const ring = h3.cellToBoundary(cell, true); // [lng,lat]
+      ring.push(ring[0]);
+      feats.push({ type:"Feature", properties:{ n, color: hexColorFor(n) }, geometry:{ type:"Polygon", coordinates:[ring] } });
+    }
+    renderHexLegend(max);
+    return { type:"FeatureCollection", features:feats };
+  }
+
+  function buildPointGeoJSON(points) {
+    return { type:"FeatureCollection", features: points.map(p => ({
+      type:"Feature",
+      properties:{ nome:p.nome, comune:p.comune||"", provincia:p.provincia||"", feature:p.feature||"",
+                   cat:p.cat, color:CAT[p.cat].color, n:p.corde.size, corde:[...p.corde].join(", ") },
+      geometry:{ type:"Point", coordinates:[p.lon, p.lat] }
+    })) };
+  }
+
+  function installLayers() {
+    map.addSource("hex", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
+    map.addLayer({ id:"hex-fill", type:"fill", source:"hex",
+      paint:{ "fill-color":["get","color"], "fill-opacity":0.5, "fill-outline-color":"rgba(255,255,255,0.25)" } });
+
+    map.addSource("punti", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
+    map.addLayer({ id:"punti", type:"circle", source:"punti",
+      paint:{
+        "circle-radius":["interpolate",["linear"],["get","n"],1,5,3,8,8,14],
+        "circle-color":["get","color"],
+        "circle-stroke-width":1.5,
+        "circle-stroke-color":"#ffffff",
+        "circle-opacity":0.92
+      } });
+
+    const popup = new maplibregl.Popup({ closeButton:false, offset:12 });
+    map.on("mouseenter","punti",() => map.getCanvas().style.cursor="pointer");
+    map.on("mouseleave","punti",() => { map.getCanvas().style.cursor=""; popup.remove(); });
+    map.on("mousemove","punti",(e) => {
+      const f = e.features[0], pr = f.properties;
+      popup.setLngLat(f.geometry.coordinates).setHTML(
+        `<div style="font-weight:600">${pr.nome}</div>`
+        + (pr.comune && pr.comune!==pr.nome ? `<div style="color:var(--muted)">${pr.comune} (${pr.provincia})</div>` : (pr.provincia?`<div style="color:var(--muted)">${pr.provincia}</div>`:""))
+        + `<div style="margin-top:4px;font-size:12px">${pr.feature} · <b>${pr.n}</b> schede</div>`
+        + `<div style="margin-top:2px;font-size:11px;color:var(--muted)">corde ${pr.corde}</div>`
+        + `<div style="margin-top:4px;font-size:11px;color:var(--accent)">clic per filtrare le schede di questo luogo</div>`
+      ).addTo(map);
+    });
+    map.on("click", "punti", (e) => { popup.remove(); setPlace(e.features[0].properties.nome); });
+    refresh(true);
+  }
+  map.on("load", installLayers);
+
+  // --- Rendering ---
+  let firstFit = true;
+  function refresh(fit) {
+    const schede = filteredSchede();
+    const pts = aggregatePoints(schede);
+    document.getElementById("countSchede").textContent = schede.length;
+    document.getElementById("countLuoghi").textContent = pts.length;
+
+    if (map.getSource("punti")) map.getSource("punti").setData(buildPointGeoJSON(pts));
+    const res = +document.getElementById("resSlider").value;
+    const showHex = document.getElementById("hexToggle").checked;
+    if (map.getSource("hex")) map.getSource("hex").setData(showHex ? buildHexGeoJSON(pts, res) : { type:"FeatureCollection", features:[] });
+
+    if (fit && pts.length && firstFit) {
+      const b = new maplibregl.LngLatBounds();
+      pts.forEach(p => b.extend([p.lon, p.lat]));
+      map.fitBounds(b, { padding:60, maxZoom:9, duration:0 });
+      firstFit = false;
+    }
+    renderList(schede);
+    renderFacets(schede);
+    renderActivePlace();
+  }
+
+  function setPlace(nome) { filters.luogo = (filters.luogo === nome) ? "" : nome; refresh(false); }
+  function renderActivePlace() {
+    const el = document.getElementById("activePlace");
+    if (!filters.luogo) { el.className = "hidden"; el.innerHTML = ""; return; }
+    el.className = "";
+    el.innerHTML =
+      `<div class="text-xs uppercase tracking-wider mb-1" style="color:var(--muted)">Luogo selezionato</div>
+       <button id="clearPlace" class="facet-pill rounded-full px-2.5 py-1 text-[12px]" aria-pressed="true" title="Rimuovi filtro luogo">
+         📍 ${escapeHtml(filters.luogo)} ✕</button>`;
+    document.getElementById("clearPlace").addEventListener("click", () => { filters.luogo = ""; refresh(false); });
+  }
+
+  function renderList(schede) {
+    const el = document.getElementById("list");
+    el.innerHTML = "";
+    for (const s of schede) {
+      const loc = s.localita.filter(l => l.nome);
+      const chips = loc.slice(0, 6).map(l =>
+        `<span class="inline-block rounded-full px-2 py-0.5 text-[11px]" style="background:${CAT[catOf(l)].color}22;color:var(--ink);border:1px solid ${CAT[catOf(l)].color}66">${l.nome}</span>`
+      ).join(" ");
+      const more = loc.length > 6 ? `<span class="text-[11px]" style="color:var(--muted)">+${loc.length-6}</span>` : "";
+      const anni = s.dataInizio ? (s.dataInizio + (s.dataFine && s.dataFine!==s.dataInizio ? "–"+s.dataFine : "")) : "—";
+      const div = document.createElement("article");
+      div.className = "card rounded-xl p-3 cursor-pointer transition";
+      div.dataset.corda = s.corda;
+      div.innerHTML =
+        `<div class="flex items-baseline gap-2">
+           <span class="font-display text-lg leading-none">${s.corda}</span>
+           <span class="text-[11px] uppercase tracking-wide tnum" style="color:var(--muted)">${anni}</span>
+         </div>
+         <div class="mt-1 text-sm font-medium" style="text-wrap:balance">${escapeHtml(shorten(s.titolo,90)) || "<span style='color:var(--muted)'>(senza titolo)</span>"}</div>
+         <div class="mt-1 text-[11px]" style="color:var(--muted)">${s.sezione?("sez. "+s.sezione+" · "):""}${escapeHtml(shorten(s.serie,42)||"—")}</div>
+         <div class="mt-2 flex flex-wrap gap-1">${chips} ${more}</div>`;
+      div.addEventListener("mouseenter", () => highlight(s));
+      div.addEventListener("mouseleave", () => { if (map.getSource("hl")) map.getSource("hl").setData({type:"FeatureCollection",features:[]}); });
+      div.addEventListener("click", () => openScheda(s));
+      el.appendChild(div);
+    }
+    if (!schede.length) el.innerHTML = `<div style="color:var(--muted)">Nessuna scheda con questi filtri.</div>`;
+  }
+
+  function zoomTo(s) {
+    const pts = s.localita.filter(l => l.lat != null);
+    if (!pts.length) return;
+    const b = new maplibregl.LngLatBounds();
+    pts.forEach(l => b.extend([l.lon, l.lat]));
+    map.fitBounds(b, { padding:{ top:80, right:540, bottom:80, left:80 }, maxZoom:10, duration:500 });
+  }
+
+  // --- Drawer di lettura della scheda ---
+  function openScheda(s) {
+    const anni = s.dataInizio ? (s.dataInizio + (s.dataFine && s.dataFine!==s.dataInizio ? "–"+s.dataFine : "")) : "—";
+    document.getElementById("drawerMeta").innerHTML =
+      `<div class="flex items-baseline gap-2">
+         <span class="font-display text-2xl leading-none">n. ${s.corda}</span>
+         <span class="text-xs uppercase tracking-wide tnum" style="color:var(--muted)">${anni}</span>
+       </div>
+       <div class="text-xs mt-0.5" style="color:var(--muted)">${s.sezione?("sez. "+s.sezione+" · "):""}${escapeHtml(s.serie||"—")}</div>`;
+    const body = document.getElementById("drawerBody");
+    body.innerHTML = s.md ? marked.parse(s.md) : "<p style='color:var(--muted)'>Testo non disponibile.</p>";
+    body.scrollTop = 0;
+    document.getElementById("drawer").classList.add("open");
+    document.getElementById("scrim").classList.add("open");
+    highlight(s); zoomTo(s);
+  }
+  function closeScheda() {
+    document.getElementById("drawer").classList.remove("open");
+    document.getElementById("scrim").classList.remove("open");
+    if (map.getSource("hl")) map.getSource("hl").setData({ type:"FeatureCollection", features:[] });
+  }
+  document.getElementById("drawerClose").addEventListener("click", closeScheda);
+  document.getElementById("scrim").addEventListener("click", closeScheda);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeScheda(); });
+  function highlight(s) {
+    if (!map.getSource("hl")) return;
+    const feats = s.localita.filter(l => l.lat != null).map(l => ({ type:"Feature", geometry:{ type:"Point", coordinates:[l.lon,l.lat] }, properties:{} }));
+    map.getSource("hl").setData({ type:"FeatureCollection", features:feats });
+  }
+
+  function renderFacets(schedeFiltrate) {
+    const box = document.getElementById("facetGroups");
+    box.innerHTML = "";
+    for (const f of FACETS) {
+      const counts = new Map();
+      // conteggio faccettato: applica tutti i filtri TRANNE quello di questa faccetta
+      const base = DATA.filter(s => schedaMatches(s, f.key));
+      for (const s of base) {
+        if (f.level === "scheda") {
+          const v = f.get(s); if (v == null) continue;
+          counts.set(v, (counts.get(v)||0)+1);
+        } else {
+          const seen = new Set();
+          for (const l of s.localita) {
+            if (!locMatches(l, f.key)) continue;
+            const v = f.get(l); if (v==null||seen.has(v)) continue;
+            seen.add(v); counts.set(v,(counts.get(v)||0)+1);
+          }
+        }
+      }
+      // mantieni visibili anche le opzioni attive con conteggio 0
+      for (const v of filters[f.key]) if (!counts.has(v)) counts.set(v, 0);
+      const values = [...counts.entries()].sort((a,b) => (typeof a[0]==="number"? a[0]-b[0] : b[1]-a[1]));
+      const wrap = document.createElement("div");
+      wrap.innerHTML = `<div class="text-xs uppercase tracking-wider mb-2" style="color:var(--muted)">${f.title}</div>`;
+      const list = document.createElement("div"); list.className = "flex flex-wrap gap-1.5";
+      for (const [v, c] of values) {
+        const b = document.createElement("button");
+        const active = filters[f.key].has(v);
+        b.className = "facet-pill rounded-full px-2.5 py-1 text-[12px]";
+        b.setAttribute("aria-pressed", active ? "true" : "false");
+        const label = f.fmt ? f.fmt(v) : v;
+        b.innerHTML = `${escapeHtml(String(label))} <span class="tnum" style="opacity:.6">${c}</span>`;
+        b.addEventListener("click", () => { toggle(f.key, v); });
+        list.appendChild(b);
+      }
+      wrap.appendChild(list); box.appendChild(wrap);
+    }
+  }
+  function toggle(key, v) { const s = filters[key]; s.has(v) ? s.delete(v) : s.add(v); refresh(false); }
+
+  // Legends
+  function renderHexLegend(max) {
+    const c = getComputedStyle(document.documentElement);
+    const cols = ["--hex0","--hex1","--hex2","--hex3","--hex4"].map(v => c.getPropertyValue(v).trim());
+    document.getElementById("hexLegend").innerHTML =
+      `<div class="text-[11px] mb-1" style="color:var(--muted)">intensità (schede/cella)</div>
+       <div class="flex items-center gap-2">
+         <span class="text-[10px] tnum" style="color:var(--muted)">1</span>
+         <div class="flex-1 h-2 rounded" style="background:linear-gradient(90deg,${cols.join(",")})"></div>
+         <span class="text-[10px] tnum" style="color:var(--muted)">${max}</span>
+       </div>`;
+  }
+  function renderCatLegend() {
+    document.getElementById("catLegend").innerHTML =
+      `<div class="text-[11px] uppercase tracking-wide mb-1" style="color:var(--muted)">Tipo di luogo</div>` +
+      Object.values(CAT).map(c =>
+        `<div class="flex items-center gap-2"><span style="width:10px;height:10px;border-radius:50%;background:${c.color};display:inline-block;border:1px solid #fff"></span><span>${c.label}</span></div>`
+      ).join("");
+  }
+  renderCatLegend();
+
+  // Highlight source needs the map loaded
+  map.on("load", () => {
+    map.addSource("hl", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
+    map.addLayer({ id:"hl", type:"circle", source:"hl",
+      paint:{ "circle-radius":13, "circle-color":"rgba(0,0,0,0)", "circle-stroke-width":3, "circle-stroke-color":"var(--accent)" } });
+  });
+
+  // --- Controls ---
+  document.getElementById("search").addEventListener("input", e => { filters.q = e.target.value.trim(); refresh(false); });
+  document.getElementById("resSlider").addEventListener("input", e => { document.getElementById("resVal").textContent = e.target.value; refresh(false); });
+  document.getElementById("hexToggle").addEventListener("change", () => refresh(false));
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    for (const k of ["provincia","sezione","serie","tipo","decennio"]) filters[k].clear();
+    filters.q=""; filters.luogo=""; document.getElementById("search").value=""; refresh(false);
+  });
+  document.getElementById("themeBtn").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", cur);
+    try { map.getSource("base").setTiles([tileUrl(cur)]); } catch(e) {}
+    renderCatLegend(); refresh(false);
+  });
+
+  // Fallback se i dati non ci sono
+  if (!DATA.length) document.getElementById("list").innerHTML =
+    `<div style="color:var(--muted)">Dati non trovati. Genera <code>catalogo_data.js</code> con <code>scripts/genera_catalogo.py</code>.</div>`;
+
+  function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+  function shorten(s,n){ s=s||""; return s.length>n ? s.slice(0,n-1)+"…" : s; }
+})();
+</script>
+</body>
+</html>

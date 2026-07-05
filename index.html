@@ -231,7 +231,7 @@
         if (!locMatches(l)) continue;
         const key = l.lat.toFixed(4) + "," + l.lon.toFixed(4);
         let p = byKey.get(key);
-        if (!p) { p = { lat:l.lat, lon:l.lon, nome:l.nome, comune:l.comune, provincia:l.provincia, feature:l.feature, cat:catOf(l), corde:new Set() }; byKey.set(key, p); }
+        if (!p) { p = { lat:l.lat, lon:l.lon, nome:l.nome, comune:l.comune, provincia:l.provincia, feature:l.feature, fonte:l.fonte||"", cat:catOf(l), corde:new Set() }; byKey.set(key, p); }
         p.corde.add(s.corda);
       }
     }
@@ -290,7 +290,7 @@
     return { type:"FeatureCollection", features: points.map(p => ({
       type:"Feature",
       properties:{ nome:p.nome, comune:p.comune||"", provincia:p.provincia||"", feature:p.feature||"",
-                   cat:p.cat, color:CAT[p.cat].color, n:p.corde.size, corde:[...p.corde].join(", ") },
+                   fonte:p.fonte||"", cat:p.cat, color:CAT[p.cat].color, n:p.corde.size, corde:[...p.corde].join(", ") },
       geometry:{ type:"Point", coordinates:[p.lon, p.lat] }
     })) };
   }
@@ -319,6 +319,7 @@
         `<div style="font-weight:600">${pr.nome}</div>`
         + (pr.comune && pr.comune!==pr.nome ? `<div style="color:var(--muted)">${pr.comune} (${pr.provincia})</div>` : (pr.provincia?`<div style="color:var(--muted)">${pr.provincia}</div>`:""))
         + `<div style="margin-top:4px;font-size:12px">${pr.feature} · <b>${pr.n}</b> schede</div>`
+        + (pr.fonte==="approssimato" ? `<div style="margin-top:2px;font-size:11px;color:#e4572e">⚠ posizione approssimata</div>` : "")
         + `<div style="margin-top:2px;font-size:11px;color:var(--muted)">corde ${pr.corde}</div>`
         + `<div style="margin-top:4px;font-size:11px;color:var(--accent)">clic per filtrare le schede di questo luogo</div>`
       ).addTo(map);

@@ -175,8 +175,8 @@
     const f = (loc.feature || "").toLowerCase();
     if (f.includes("gruppo")) return "gruppo";
     if (f === "isola") return "isola";
-    if (f === "provincia") return "provincia";
-    if (f.includes("banco") || f.includes("canale") || f.includes("salina")) return "feature";
+    if (f === "provincia" || loc.stato === "provincia") return "provincia";
+    if (f.includes("banco") || f.includes("canale") || f.includes("salina") || loc.stato === "feature_geografica") return "feature";
     if (loc.stato === "comune" || f === "comune" || f === "sede comunale") return "comune";
     if (f.includes("centro")) return "centro";
     return "altro";
@@ -485,9 +485,11 @@
        </div>`;
   }
   function renderCatLegend() {
+    const pres = new Set();
+    for (const s of DATA) for (const l of s.localita) if (l.nome) pres.add(catOf(l));
     document.getElementById("catLegend").innerHTML =
       `<div class="text-[11px] uppercase tracking-wide mb-1" style="color:var(--muted)">Tipo di luogo</div>` +
-      Object.values(CAT).map(c =>
+      Object.entries(CAT).filter(([k]) => pres.has(k)).map(([, c]) =>
         `<div class="flex items-center gap-2"><span style="width:10px;height:10px;border-radius:50%;background:${c.color};display:inline-block;border:1px solid #fff"></span><span>${c.label}</span></div>`
       ).join("");
   }

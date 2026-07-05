@@ -132,6 +132,7 @@
           </div>
           <div id="hexLegend" class="mt-2"></div>
           <button id="fitBtn" class="mt-3 w-full facet-pill rounded-lg px-2 py-1.5 text-[12px]" title="Inquadra la mappa sui risultati filtrati">⤢ Inquadra i risultati</button>
+          <button id="linkBtn" class="mt-1.5 w-full facet-pill rounded-lg px-2 py-1.5 text-[12px]" title="Copia un link che riapre questa vista (filtri + mappa)">🔗 Copia link</button>
         </div>
         <!-- Category legend -->
         <div id="catLegend" class="absolute bottom-6 right-3 z-10 rounded-xl p-3 text-xs shadow-lg space-y-1"
@@ -260,6 +261,37 @@
     return [...byKey.values()];
   }
 
+  // --- Deep linking via query string (filtri + vista mappa) ---
+  const PARAM = { prov:"provincia", sez:"sezione", serie:"serie", tipo:"tipo", dec:"decennio", proc:"procedimento", ogg:"oggetto" };
+  function readUrl() {
+    const p = new URLSearchParams(location.search);
+    filters.q = p.get("q") || "";
+    filters.luogo = p.get("luogo") || "";
+    for (const [param, key] of Object.entries(PARAM)) {
+      const v = p.get(param);
+      if (v) v.split("~").forEach(x => filters[key].add(param === "dec" ? Number(x) : x));
+    }
+    const c = p.get("c"), z = p.get("z");
+    if (c && z) {
+      const [lng, lat] = c.split(",").map(Number);
+      if (isFinite(lng) && isFinite(lat) && isFinite(+z)) return { lng, lat, zoom:+z };
+    }
+    return null;
+  }
+  function writeUrl() {
+    const p = new URLSearchParams();
+    if (filters.q) p.set("q", filters.q);
+    if (filters.luogo) p.set("luogo", filters.luogo);
+    for (const [param, key] of Object.entries(PARAM)) {
+      if (filters[key].size) p.set(param, [...filters[key]].join("~"));
+    }
+    try { const cc = map.getCenter(); p.set("c", cc.lng.toFixed(4)+","+cc.lat.toFixed(4)); p.set("z", map.getZoom().toFixed(2)); } catch (e) {}
+    const qs = p.toString();
+    history.replaceState(null, "", qs ? "?"+qs : location.pathname);
+  }
+  const _view = readUrl();
+  document.getElementById("search").value = filters.q;
+
   // --- Mappa ---
   const start = document.documentElement.getAttribute("data-theme")
     || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -274,9 +306,10 @@
       sources: { base: { type:"raster", tiles:[tileUrl(start)], tileSize:256, attribution:"© OpenStreetMap © CARTO" } },
       layers: [{ id:"base", type:"raster", source:"base" }]
     },
-    center: [13.4, 37.9], zoom: 6.4, attributionControl: true
+    center: _view ? [_view.lng, _view.lat] : [13.4, 37.9], zoom: _view ? _view.zoom : 6.4, attributionControl: true
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "top-right");
+  map.on("moveend", writeUrl);
 
   const HEX_COLORS = ["--hex0","--hex1","--hex2","--hex3","--hex4"].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
   let hexBreaks = [1,2,3,5,8];
@@ -352,7 +385,7 @@
   map.on("load", installLayers);
 
   // --- Rendering ---
-  let firstFit = true;
+  let firstFit = !_view;   // se la vista arriva dall'URL, non ri-inquadrare
   function refresh(fit) {
     const schede = filteredSchede();
     const pts = aggregatePoints(schede);
@@ -375,7 +408,7 @@
     renderActivePlace();
   }
 
-  function setPlace(nome) { filters.luogo = (filters.luogo === nome) ? "" : nome; refresh(false); }
+  function setPlace(nome) { filters.luogo = (filters.luogo === nome) ? "" : nome; refresh(false); writeUrl(); }
   function renderActivePlace() {
     const el = document.getElementById("activePlace");
     if (!filters.luogo) { el.className = "hidden"; el.innerHTML = ""; return; }
@@ -384,7 +417,7 @@
       `<div class="text-xs uppercase tracking-wider mb-1" style="color:var(--muted)">Luogo selezionato</div>
        <button id="clearPlace" class="facet-pill rounded-full px-2.5 py-1 text-[12px]" aria-pressed="true" title="Rimuovi filtro luogo">
          📍 ${escapeHtml(filters.luogo)} ✕</button>`;
-    document.getElementById("clearPlace").addEventListener("click", () => { filters.luogo = ""; refresh(false); });
+    document.getElementById("clearPlace").addEventListener("click", () => { filters.luogo = ""; refresh(false); writeUrl(); });
   }
 
   function renderList(schede) {
@@ -518,7 +551,7 @@
       wrap.appendChild(list); box.appendChild(wrap);
     }
   }
-  function toggle(key, v) { const s = filters[key]; s.has(v) ? s.delete(v) : s.add(v); refresh(false); }
+  function toggle(key, v) { const s = filters[key]; s.has(v) ? s.delete(v) : s.add(v); refresh(false); writeUrl(); }
 
   // Legends
   function renderHexLegend(max) {
@@ -551,13 +584,20 @@
   });
 
   // --- Controls ---
-  document.getElementById("search").addEventListener("input", e => { filters.q = e.target.value.trim(); refresh(false); });
+  document.getElementById("search").addEventListener("input", e => { filters.q = e.target.value.trim(); refresh(false); writeUrl(); });
   document.getElementById("resSlider").addEventListener("input", e => { document.getElementById("resVal").textContent = e.target.value; refresh(false); });
   document.getElementById("hexToggle").addEventListener("change", () => refresh(false));
   document.getElementById("fitBtn").addEventListener("click", fitToFiltered);
+  document.getElementById("linkBtn").addEventListener("click", async () => {
+    writeUrl();
+    const btn = document.getElementById("linkBtn");
+    try { await navigator.clipboard.writeText(location.href); btn.textContent = "✓ Link copiato"; }
+    catch (e) { btn.textContent = "Copia manuale dall'URL"; }
+    setTimeout(() => { btn.textContent = "🔗 Copia link"; }, 1600);
+  });
   document.getElementById("resetBtn").addEventListener("click", () => {
     for (const k of ["provincia","sezione","serie","tipo","decennio","procedimento","oggetto"]) filters[k].clear();
-    filters.q=""; filters.luogo=""; document.getElementById("search").value=""; refresh(false);
+    filters.q=""; filters.luogo=""; document.getElementById("search").value=""; refresh(false); writeUrl();
   });
   document.getElementById("themeBtn").addEventListener("click", () => {
     const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
